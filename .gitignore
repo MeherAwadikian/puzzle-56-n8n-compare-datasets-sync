@@ -1,0 +1,4 @@
+# generated demo databases (recreate with: python sync.py --reset)
+*.db
+__pycache__/
+*.pyc

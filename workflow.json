@@ -1,0 +1,136 @@
+{
+  "id": "puzzle56comparesync",
+  "name": "Puzzle 56 - Sync Two Databases (Compare Datasets)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "56000000-0000-4000-8000-000000000001",
+      "name": "When clicking 'Execute workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [220, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// SOURCE database = the authoritative / desired state.\n// In a real sync this node would be an HTTP / Postgres / Supabase / Data Table\n// read of the system of record. Keyed on `sku`.\nreturn [\n  { json: { sku: 'SKU-1', name: 'Widget',  price: 10, stock: 100 } },\n  { json: { sku: 'SKU-2', name: 'Gadget',  price: 25, stock: 40  } },\n  { json: { sku: 'SKU-3', name: 'Gizmo',   price: 15, stock: 7   } }\n];"
+      },
+      "id": "56000000-0000-4000-8000-000000000002",
+      "name": "Source DB (desired)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 280]
+    },
+    {
+      "parameters": {
+        "jsCode": "// TARGET database = the copy being kept in sync (current state).\n// SKU-1 is identical, SKU-2 has a stale price (20 vs 25), SKU-4 no longer\n// exists in source, SKU-3 does not exist here yet. Keyed on `sku`.\nreturn [\n  { json: { sku: 'SKU-1', name: 'Widget',    price: 10, stock: 100 } },\n  { json: { sku: 'SKU-2', name: 'Gadget',    price: 20, stock: 40  } },\n  { json: { sku: 'SKU-4', name: 'Doohickey', price: 30, stock: 5   } }\n];"
+      },
+      "id": "56000000-0000-4000-8000-000000000003",
+      "name": "Target DB (current)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [480, 520]
+    },
+    {
+      "parameters": {
+        "mergeByFields": {
+          "values": [
+            {
+              "field1": "sku",
+              "field2": "sku"
+            }
+          ]
+        },
+        "resolve": "preferInput1",
+        "options": {}
+      },
+      "id": "56000000-0000-4000-8000-000000000004",
+      "name": "Compare Datasets",
+      "type": "n8n-nodes-base.compareDatasets",
+      "typeVersion": 2.3,
+      "position": [760, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 'In A only' = present in SOURCE but not TARGET -> rows to INSERT into target.\nreturn items.map(i => ({ json: { action: 'INSERT', table: 'target', ...i.json } }));"
+      },
+      "id": "56000000-0000-4000-8000-000000000005",
+      "name": "INSERT into target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 160]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 'Same' = key matches and all compared fields equal -> nothing to do.\nreturn items.map(i => ({ json: { action: 'NOOP', table: 'target', ...i.json } }));"
+      },
+      "id": "56000000-0000-4000-8000-000000000006",
+      "name": "No change",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 340]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 'Different' = key matches but fields differ -> rows to UPDATE in target.\n// resolve=preferInput1 means these carry the SOURCE (desired) values.\nreturn items.map(i => ({ json: { action: 'UPDATE', table: 'target', ...i.json } }));"
+      },
+      "id": "56000000-0000-4000-8000-000000000007",
+      "name": "UPDATE target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 520]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 'In B only' = present in TARGET but not SOURCE -> rows to DELETE from target.\nreturn items.map(i => ({ json: { action: 'DELETE', table: 'target', ...i.json } }));"
+      },
+      "id": "56000000-0000-4000-8000-000000000008",
+      "name": "DELETE from target",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 700]
+    }
+  ],
+  "connections": {
+    "When clicking 'Execute workflow'": {
+      "main": [
+        [
+          { "node": "Source DB (desired)", "type": "main", "index": 0 },
+          { "node": "Target DB (current)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Source DB (desired)": {
+      "main": [
+        [
+          { "node": "Compare Datasets", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Target DB (current)": {
+      "main": [
+        [
+          { "node": "Compare Datasets", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Compare Datasets": {
+      "main": [
+        [
+          { "node": "INSERT into target", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "No change", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "UPDATE target", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "DELETE from target", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
